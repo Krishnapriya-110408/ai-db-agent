@@ -1,3 +1,5 @@
 streamlit
-anthropic
+sqlite3
+groq
+google-genai
 plotly
