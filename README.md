@@ -1,42 +1,27 @@
-# AI-Powered Database Chat Agent
+## Setup & Installation
 
-A ChatGPT-like conversational agent that connects to a SQL database, answers
-natural language questions, and generates charts / flowcharts using LLM
-function calling (tool use).
+1. Clone the repository.
+2. Install the required Python packages:
+   pip install -r requirements.txt
 
-## Architecture
-- **Frontend + Backend**: Streamlit (single app.py)
-- **LLM**: Google Gemini (function calling / tool use)
-- **Database**: SQLite (sample e-commerce dataset: customers, products, orders, order_items)
-- **Charts**: Plotly (bar, line, pie)
-- **Flowcharts / ER diagrams**: Mermaid.js (rendered via markdown code block)
+3. Create a `.env` file in the project root.
+4. Add your Google Gemini API key:
+   GOOGLE_API_KEY=your_api_key_here
 
-## Tools implemented
-| Tool | Purpose |
-|---|---|
-| `get_schema` | Returns DB tables and columns as JSON |
-| `execute_query` | Runs a SQL query, returns JSON rows |
-| `generate_chart` | Creates bar / line / pie charts from data |
-| `generate_flowchart` | Creates Mermaid ER diagrams / process flows |
-| `explain_data` | Generates a natural language insight summary |
+5. Run the application:
+   python3 -m streamlit run app.py
 
-## Setup & Run
-```bash
-pip install -r requirements.txt
-python create_sample_db.py      # creates ecommerce.db with sample data
-streamlit run app.py
-```
-Enter your Google API key in the sidebar when the app opens (get one free at aistudio.google.com/apikey).
+## How to Use
 
-## Sample questions to try
-- "What tables are in this database?"
-- "Show me the top 5 products by total quantity sold as a bar chart"
-- "Draw an ER diagram for this database"
-- "Which city has the most customers? Show as a pie chart"
-- "Explain the order status distribution"
+1. Enter your Google Gemini API key in the sidebar if required.
+2. Enter a natural language question about the database.
+3. The AI agent analyzes the question and queries the SQLite database.
+4. Results are displayed as text and visualizations when applicable.
 
-## Notes
-- Queries are restricted to the local SQLite sample database.
-- The agent uses Gemini's native function-calling: it can call multiple tools
-  in sequence (e.g. get_schema → execute_query → generate_chart → explain_data)
-  within a single user turn.
+## Project Structure
+
+- `app.py` – Main Streamlit application and AI agent
+- `create_sample_db.py` – Creates the sample database
+- `ecommerce.db` – Sample SQLite database
+- `requirements.txt` – Python dependencies
+- `.env` – Local API key configuration (not committed to GitHub)
