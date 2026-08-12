@@ -1,27 +1,42 @@
-## Setup & Installation
+# AI Database Chat Agent
+
+## 🐉 Team DRAGON
+
+### Team Members
+
+- Padmarajan.B
+- Krishna Priya.D
+- Apoorva.S
+- Mithun.S
+- Varshni.V
+
+## 📌 Project Overview
+
+AI Database Chat Agent is an AI-powered application that allows users to interact with an e-commerce database using natural language.
+
+Instead of writing complex SQL queries manually, users can simply ask questions in normal English. The agent analyzes the database and provides useful results and visualizations.
+
+## ✨ Key Features
+
+- 🔹 Natural language database interaction
+- 🔹 Top products by revenue analysis
+- 🔹 Bar graph generation
+- 🔹 ER diagram generation
+- 🔹 E-commerce database analysis
+- 🔹 AI-powered responses
+
+## 🛠️ Technologies Used
+
+- Python
+- Streamlit
+- SQLite
+- AI / LLM
+- Pandas
+
+## 🚀 Setup & Installation
 
 1. Clone the repository.
-2. Install the required Python packages:
-   pip install -r requirements.txt
+2. Install the required packages:
 
-3. Create a `.env` file in the project root.
-4. Add your Google Gemini API key:
-   GOOGLE_API_KEY=your_api_key_here
-
-5. Run the application:
-   python3 -m streamlit run app.py
-
-## How to Use
-
-1. Enter your Google Gemini API key in the sidebar if required.
-2. Enter a natural language question about the database.
-3. The AI agent analyzes the question and queries the SQLite database.
-4. Results are displayed as text and visualizations when applicable.
-
-## Project Structure
-
-- `app.py` – Main Streamlit application and AI agent
-- `create_sample_db.py` – Creates the sample database
-- `ecommerce.db` – Sample SQLite database
-- `requirements.txt` – Python dependencies
-- `.env` – Local API key configuration (not committed to GitHub)
+```bash
+pip install -r requirements.txt
