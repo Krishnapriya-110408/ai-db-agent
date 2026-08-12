@@ -73,7 +73,7 @@ def generate_diagram(diagram_type, dot_source, title="Diagram"):
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-# ---------- Tool schemas for LLM ----------
+# ---------- Tool schemas for LLM (Groq / OpenAI-style) ----------
 tools = [
     {
         "type": "function",
@@ -146,8 +146,30 @@ AVAILABLE_FUNCTIONS = {
     "generate_diagram": generate_diagram
 }
 
+# ---------- Gemini tool schemas (function_declarations format) ----------
+GEMINI_TOOLS = [{
+    "function_declarations": [
+        {
+            "name": t["function"]["name"],
+            "description": t["function"]["description"],
+            "parameters": t["function"]["parameters"]
+        } for t in tools
+    ]
+}]
+
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = "gemini-flash-latest"
+
+SYSTEM_PROMPT = (
+    "You are a helpful data analyst assistant with access to database tools "
+    "(get_schema, execute_query, generate_chart, generate_diagram). "
+    "Always call get_schema first if you are unsure of table or column names — "
+    "never guess a column name. If the user asks for a flowchart or an ER "
+    "(Entity-Relationship) diagram, call get_schema first, then call "
+    "generate_diagram with valid Graphviz DOT source. Always use the provided "
+    "tools via proper tool calls to answer questions about data — never write "
+    "function calls as plain text in your response."
+)
 
 FUNC_TEXT_PATTERN = re.compile(
     r"<function=(\w+)>\s*(\{.*?\})\s*</function>", re.DOTALL
@@ -196,7 +218,6 @@ def call_llm(original_prompt, groq_messages):
             msg = response.choices[0].message
 
             if msg.tool_calls:
-                # FIX: append a plain dict, never the raw SDK object.
                 groq_messages.append({
                     "role": "assistant",
                     "content": msg.content or "",
@@ -245,12 +266,48 @@ def call_llm(original_prompt, groq_messages):
         return "I couldn't complete the request after several tool calls. Please try rephrasing your question."
 
     def run_gemini():
-        # FIX: uses the original prompt string, not the mutated groq_messages list.
-        response = gemini_client.models.generate_content(
+        # FIX: Gemini now gets the SAME tools + system instruction as Groq,
+        # and actually executes function calls in a loop instead of just
+        # answering blind (which caused "I don't have direct access..." replies).
+        chat = gemini_client.chats.create(
             model=GEMINI_MODEL,
-            contents=original_prompt
+            config={
+                "tools": GEMINI_TOOLS,
+                "system_instruction": SYSTEM_PROMPT
+            }
         )
-        return response.text
+
+        max_rounds = 5
+        response = chat.send_message(original_prompt)
+
+        for _ in range(max_rounds):
+            function_calls = []
+            for part in response.candidates[0].content.parts:
+                if getattr(part, "function_call", None):
+                    function_calls.append(part.function_call)
+
+            if not function_calls:
+                return response.text
+
+            function_response_parts = []
+            for fc in function_calls:
+                fn_name = fc.name
+                fn_args = dict(fc.args) if fc.args else {}
+                try:
+                    result = AVAILABLE_FUNCTIONS[fn_name](**fn_args)
+                except Exception as tool_err:
+                    result = json.dumps({"error": f"Tool '{fn_name}' failed: {tool_err}"})
+
+                function_response_parts.append(
+                    genai.types.Part.from_function_response(
+                        name=fn_name,
+                        response={"result": result}
+                    )
+                )
+
+            response = chat.send_message(function_response_parts)
+
+        return "I couldn't complete the request after several tool calls. Please try rephrasing your question."
 
     if groq_client:
         try:
@@ -278,19 +335,7 @@ if prompt := st.chat_input("Ask about your data... e.g. 'Show top 5 products by 
     st.session_state.chat_history.append({"role": "user", "content": prompt})
 
     groq_messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a helpful data analyst assistant with access to database tools "
-                "(get_schema, execute_query, generate_chart, generate_diagram). "
-                "Always call get_schema first if you are unsure of table or column names — "
-                "never guess a column name. If the user asks for a flowchart or an ER "
-                "(Entity-Relationship) diagram, call get_schema first, then call "
-                "generate_diagram with valid Graphviz DOT source. Always use the provided "
-                "tools via proper tool calls to answer questions about data — never write "
-                "function calls as plain text in your response."
-            )
-        },
+        {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt}
     ]
 
