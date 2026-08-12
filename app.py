@@ -29,6 +29,13 @@ def get_schema():
     for table in tables:
         cursor.execute(f"PRAGMA table_info({table})")
         schema[table] = [{"column": col[1], "type": col[2]} for col in cursor.fetchall()]
+        cursor.execute(f"PRAGMA foreign_key_list({table})")
+        fks = cursor.fetchall()
+        if fks:
+            schema[table + "_foreign_keys"] = [
+                {"column": fk[3], "references_table": fk[2], "references_column": fk[4]}
+                for fk in fks
+            ]
     conn.close()
     return json.dumps(schema)
 
@@ -57,13 +64,22 @@ def generate_chart(chart_type, labels, values, title="Chart"):
     st.plotly_chart(fig, use_container_width=True)
     return "Chart displayed successfully"
 
+def generate_diagram(diagram_type, dot_source, title="Diagram"):
+    """Render a flowchart or ER diagram from Graphviz DOT source."""
+    try:
+        st.subheader(title)
+        st.graphviz_chart(dot_source)
+        return f"{diagram_type} diagram displayed successfully"
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
 # ---------- Tool schemas for LLM ----------
 tools = [
     {
         "type": "function",
         "function": {
             "name": "get_schema",
-            "description": "Get the database schema showing all tables, columns, and types. ALWAYS call this first before writing any SQL query, so you use the correct column names.",
+            "description": "Get the database schema showing all tables, columns, types, and foreign keys. ALWAYS call this first before writing any SQL query or ER diagram, so you use the correct column/table names and relationships.",
             "parameters": {"type": "object", "properties": {}}
         }
     },
@@ -97,18 +113,39 @@ tools = [
                 "required": ["chart_type", "labels", "values"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_diagram",
+            "description": (
+                "Generate a flowchart or an ER (Entity-Relationship) diagram using Graphviz DOT syntax. "
+                "For ER diagrams, first call get_schema to know the real tables/columns/foreign keys, then "
+                "build a DOT digraph representing tables as nodes and foreign keys as edges. "
+                "For flowcharts, build a DOT digraph representing the process steps as nodes and arrows as edges. "
+                "The dot_source MUST be valid Graphviz DOT text, e.g. "
+                "'digraph G { rankdir=LR; Orders -> Customers [label=\"customer_id\"]; }'"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "diagram_type": {"type": "string", "enum": ["flowchart", "er"]},
+                    "dot_source": {"type": "string", "description": "Valid Graphviz DOT source code for the diagram"},
+                    "title": {"type": "string"}
+                },
+                "required": ["diagram_type", "dot_source"]
+            }
+        }
     }
 ]
 
 AVAILABLE_FUNCTIONS = {
     "get_schema": get_schema,
     "execute_query": execute_query,
-    "generate_chart": generate_chart
+    "generate_chart": generate_chart,
+    "generate_diagram": generate_diagram
 }
 
-# Use a stronger model for reliable native tool-calling.
-# llama-3.1-8b-instant is fast but often fails to emit proper tool_calls
-# and instead writes the function call as plain text.
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = "gemini-flash-latest"
 
@@ -117,8 +154,6 @@ FUNC_TEXT_PATTERN = re.compile(
 )
 
 def parse_text_function_call(text):
-    """Fallback: some models occasionally emit the tool call as plain text
-    instead of using the structured tool_calls field. Detect and parse it."""
     if not text:
         return None
     match = FUNC_TEXT_PATTERN.search(text)
@@ -133,40 +168,71 @@ def parse_text_function_call(text):
         return None
     return fn_name, fn_args
 
+def safe_parse_args(raw_args):
+    """FIX: Groq sometimes sends the literal string 'null' for functions
+    with no arguments (e.g. get_schema). json.loads('null') -> None, and
+    func(**None) crashes with 'argument after ** must be a mapping, not NoneType'."""
+    if not raw_args:
+        return {}
+    try:
+        parsed = json.loads(raw_args)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return parsed
+
 # ---------- Fallback LLM call with tool execution ----------
-def call_llm(messages):
+def call_llm(original_prompt, groq_messages):
     def run_groq():
         max_rounds = 5
         for _ in range(max_rounds):
             response = groq_client.chat.completions.create(
                 model=GROQ_MODEL,
-                messages=messages,
+                messages=groq_messages,
                 tools=tools,
                 tool_choice="auto"
             )
             msg = response.choices[0].message
 
-            # Case 1: proper structured tool call
             if msg.tool_calls:
-                messages.append(msg)
+                # FIX: append a plain dict, never the raw SDK object.
+                groq_messages.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        }
+                        for tc in msg.tool_calls
+                    ]
+                })
                 for tool_call in msg.tool_calls:
                     fn_name = tool_call.function.name
-                    fn_args = json.loads(tool_call.function.arguments)
-                    result = AVAILABLE_FUNCTIONS[fn_name](**fn_args)
-                    messages.append({
+                    fn_args = safe_parse_args(tool_call.function.arguments)
+                    try:
+                        result = AVAILABLE_FUNCTIONS[fn_name](**fn_args)
+                    except Exception as tool_err:
+                        result = json.dumps({"error": f"Tool '{fn_name}' failed: {tool_err}"})
+                    groq_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "content": str(result)
                     })
-                continue  # let the model see the tool result and respond again
+                continue
 
-            # Case 2: model wrote the function call as plain text (fallback)
             parsed = parse_text_function_call(msg.content)
             if parsed:
                 fn_name, fn_args = parsed
+                fn_args = fn_args or {}
                 result = AVAILABLE_FUNCTIONS[fn_name](**fn_args)
-                messages.append({"role": "assistant", "content": msg.content})
-                messages.append({
+                groq_messages.append({"role": "assistant", "content": msg.content})
+                groq_messages.append({
                     "role": "user",
                     "content": f"Tool '{fn_name}' result: {result}\n\n"
                                 f"Now answer the original question in plain language using this result. "
@@ -174,16 +240,15 @@ def call_llm(messages):
                 })
                 continue
 
-            # Case 3: normal final answer
             return msg.content
 
         return "I couldn't complete the request after several tool calls. Please try rephrasing your question."
 
     def run_gemini():
-        prompt = messages[-1]["content"]
+        # FIX: uses the original prompt string, not the mutated groq_messages list.
         response = gemini_client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=prompt
+            contents=original_prompt
         )
         return response.text
 
@@ -212,16 +277,18 @@ if prompt := st.chat_input("Ask about your data... e.g. 'Show top 5 products by 
     st.chat_message("user").write(prompt)
     st.session_state.chat_history.append({"role": "user", "content": prompt})
 
-    messages = [
+    groq_messages = [
         {
             "role": "system",
             "content": (
                 "You are a helpful data analyst assistant with access to database tools "
-                "(get_schema, execute_query, generate_chart). "
+                "(get_schema, execute_query, generate_chart, generate_diagram). "
                 "Always call get_schema first if you are unsure of table or column names — "
-                "never guess a column name. Always use the provided tools via proper tool "
-                "calls to answer questions about data — never write function calls as plain "
-                "text in your response."
+                "never guess a column name. If the user asks for a flowchart or an ER "
+                "(Entity-Relationship) diagram, call get_schema first, then call "
+                "generate_diagram with valid Graphviz DOT source. Always use the provided "
+                "tools via proper tool calls to answer questions about data — never write "
+                "function calls as plain text in your response."
             )
         },
         {"role": "user", "content": prompt}
@@ -229,7 +296,7 @@ if prompt := st.chat_input("Ask about your data... e.g. 'Show top 5 products by 
 
     with st.spinner("Thinking..."):
         try:
-            answer, provider_used = call_llm(messages)
+            answer, provider_used = call_llm(prompt, groq_messages)
             st.chat_message("assistant").write(answer)
             st.caption(f"Answered by: {provider_used}")
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
