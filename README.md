@@ -1,6 +1,6 @@
-# 🐉 AI Database Chat Agent
+#  AI Database Chat Agent
 
-## 👥 Team DRAGON
+## Team DRAGON
 
 ### Team Members
 - Padmarajan.B
@@ -11,7 +11,7 @@
 
 ---
 
-## 📌 Project Overview
+##  Project Overview
 
 AI Database Chat Agent is an AI-powered application that allows users to interact with an e-commerce database using natural language.
 
@@ -19,19 +19,19 @@ Instead of manually writing complex SQL queries, users can simply ask questions 
 
 ---
 
-## 🌐 Live Demo
+##  Live Demo
 
 [Click this to see live demo]: AI DB Agent·Streamlit   https://share.google/O2He8s94inj4TUOwi
 
 ---
 
-## 🎥 Demo Video
+## Demo Video
 
 [Watch the Project Demo Video] https://drive.google.com/drive/folders/1T-qPPaQ_d8msHICqx4G7u3uALyHwECAp
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 - Natural language interaction with database
 - AI-powered database analysis
@@ -45,7 +45,7 @@ Instead of manually writing complex SQL queries, users can simply ask questions 
 
 ---
 
-## 🤖 How the AI Agent Works
+##  How the AI Agent Works
 
 The agent follows these steps:
 
@@ -63,7 +63,7 @@ The agent follows these steps:
 
 ---
 
-## 🛠️ Technologies Used
+##  Technologies Used
 
 ### Programming Language
 - Python
@@ -86,7 +86,7 @@ The agent follows these steps:
 
 ---
 
-## 🗄️ Database
+##  Database
 
 The project uses an SQLite database:
 
@@ -96,7 +96,7 @@ The database contains sample e-commerce data that is used for product, revenue, 
 
 ---
 
-## 📊 Database Tables
+## Database Tables
 
 The database stores e-commerce-related information used by the AI agent for analysis and reporting.
 
@@ -104,7 +104,7 @@ The agent uses the available database tables to retrieve product and revenue inf
 
 ---
 
-## 💬 Example Questions
+##  Example Questions
 
 Users can ask questions such as:
 
@@ -116,7 +116,7 @@ Users can ask questions such as:
 
 ---
 
-## 📤 Output
+##  Output
 
 The AI agent can provide:
 
@@ -129,7 +129,7 @@ The AI agent can provide:
 
 ---
 
-## 🧠 AI Insights
+## AI Insights
 
 The agent analyzes the available data and provides useful insights such as:
 
@@ -143,7 +143,7 @@ This helps users understand their e-commerce data without manually analyzing the
 
 ---
 
-## 📁 Data
+##  Data
 
 The project uses sample e-commerce data stored in:
 
@@ -153,3 +153,23 @@ A sample database can be generated using:
 
 ```bash
 python create_sample_db.py
+
+
+## Example Queries
+
+1. Show me all products available in the database.
+
+
+2. What are the top 5 best-selling products?
+
+
+3. Show me the total sales for each product category.
+
+
+4. Which customers have placed the most orders?
+
+
+5. What is the total revenue generated from all orders?
+
+
+
