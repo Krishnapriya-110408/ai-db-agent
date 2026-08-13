@@ -155,21 +155,6 @@ A sample database can be generated using:
 python create_sample_db.py
 
 
-## Example Queries
-
-1. Show me all products available in the database.
-
-
-2. What are the top 5 best-selling products?
-
-
-3. Show me the total sales for each product category.
-
-
-4. Which customers have placed the most orders?
-
-
-5. What is the total revenue generated from all orders?
 
 
 
